@@ -4,8 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Data.Array.Accelerate.Apart.Exp (
-  expToC, openExpToC, fun1ToC, fun2ToC,
-  userFun1, userFun2, expToString
+  expToC, openExpToC, fun1ToC, fun2ToC
 ) where
 
   -- standard libraries
@@ -31,7 +30,6 @@ import           Data.Array.Accelerate.Analysis.Type
 import           Data.Array.Accelerate.Apart.Base
 import           Data.Array.Accelerate.Apart.Type
 
-
 -- Generating C code from scalar Accelerate expressions
 -- ----------------------------------------------------
 
@@ -40,9 +38,6 @@ import           Data.Array.Accelerate.Apart.Type
 --
 expToC :: Elt t => Exp () t -> [C.Exp]
 expToC = openExpToC EmptyEnv EmptyEnv
-
-expToString :: Elt t => Exp () t -> String
-expToString = show . C.ppr . head . expToC
 
 -- Compile an open embedded scalar unary function into a list of C expression whose length corresponds to the number of
 -- tuple components of the embedded result type. In addition ot the generated C, the types and names of the variables
