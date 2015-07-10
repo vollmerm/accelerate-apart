@@ -5,7 +5,7 @@
 
 module Data.Array.Accelerate.Apart.Acc (
   OpenAccWithName(..), OpenExpWithName, OpenFunWithName,
-  accToApart, funToUserFun
+  accToApart, fun1ToUserFun
   ) where
 
 import           Control.Monad.State
@@ -26,18 +26,73 @@ type OpenExpWithName = PreOpenExp OpenAccWithName
 type OpenFunWithName = PreOpenFun OpenAccWithName
 
 data UserType = Fl | Fx | Tup [UserType]
+              deriving (Show)
 type UserVal = (UserType, String)
 
-data UserFun = UserFun
-               { params     :: [UserVal]
-               , code       :: [C.Exp]
-               , returnType :: UserVal
-               }
+data ApartFun = ApartFun
+                { name   :: String
+                , params :: [UserVal]
+                , code   :: String
+                , ret    :: UserType
+                }
+              deriving (Show)
+
+type UserFun = ApartFun
+type ArrayFun = ApartFun
 
 data GenState = GenState
-                { unique :: Int
-                , defs   :: [UserFun]
+                { unique     :: Int
+                , scalarDefs :: [UserFun]
+                , arrayDefs  :: [ArrayFun]
                 }
 
+type Gen = State GenState
+
 accToApart = undefined
-funToUserFun = undefined
+
+incUnique :: Gen ()
+incUnique = state $ \s -> ((), s { unique = (unique s) + 1 })
+
+gensym :: Gen String
+gensym = do
+  s <- get
+  let i = unique s
+  incUnique
+  return $ "fun" ++ (show i)
+
+addScalarDef :: UserFun -> Gen ()
+addScalarDef def = state $ \s -> ((), s { scalarDefs = (scalarDefs s) ++ [def] })
+
+addArrayDef :: ArrayFun -> Gen ()
+addArrayDef def = state $ \s -> ((), s { arrayDefs = (arrayDefs s) ++ [def] })
+
+fun1ToUserFun :: forall t t' aenv. (Elt t, Elt t')
+              => Int -> Env aenv -> OpenFun () aenv (t -> t') -> UserFun
+fun1ToUserFun i aenv e@(Lam (Body _)) = undefined
+  where (bnds, exps) = fun1ToC aenv e
+fun1ToUserFun _i _aenv _ = error "unreachable"
+
+fun1Def :: forall t t' aenv. (Elt t, Elt t')
+        => Env aenv -> OpenFun () aenv (t -> t') -> Gen ()
+fun1Def aenv e@(Lam (Body _)) = do
+  s <- get
+  addScalarDef $ fun1ToUserFun (unique s) aenv e
+  incUnique
+fun1Def _aenv _ = error "unreachable"
+
+accGen :: forall arrs aenv. Arrays arrs
+         => Env aenv -> OpenAcc aenv arrs -> Gen (OpenAccWithName aenv arrs)
+accGen aenv' (OpenAcc (Alet bnd body)) = do
+  bnd'  <- accGen aenv' bnd
+  body' <- accGen (snd $ pushAccEnv aenv' bnd) body
+  return $ OpenAccWithName noName (Alet bnd' body')
+accGen aenv' acc@(OpenAcc (Map f arr)) = do
+  arr' <- accGen aenv' arr
+  funName <- gensym
+  let cresTys    = accTypeToC acc
+      cresNames  = accNames "res" [length cresTys - 1]
+      cargTys    = accTypeToC arr
+      cargNames  = accNames "arg" [length cargTys - 1]
+      (bnds, es) = fun1ToC aenv' f
+  return undefined
+accGen _aenv _ = undefined
