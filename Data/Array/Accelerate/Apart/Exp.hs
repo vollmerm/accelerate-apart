@@ -4,7 +4,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Data.Array.Accelerate.Apart.Exp (
-  expToC, openExpToC, fun1ToC, fun2ToC
+  expToC, openExpToC, fun1ToC, fun2ToC,
+  userFun1, userFun2, expToString
 ) where
 
   -- standard libraries
@@ -14,6 +15,7 @@ import           Data.Char
 import           Data.Loc
 import qualified Language.C                                 as C
 import           Language.C.Quote.C                         as C
+import qualified Text.PrettyPrint.Mainland                  as C
 
   -- accelerate
 import           Data.Array.Accelerate.Array.Representation (SliceIndex (..))
@@ -39,6 +41,9 @@ import           Data.Array.Accelerate.Apart.Type
 expToC :: Elt t => Exp () t -> [C.Exp]
 expToC = openExpToC EmptyEnv EmptyEnv
 
+expToString :: Elt t => Exp () t -> String
+expToString = show . C.ppr . head . expToC
+
 -- Compile an open embedded scalar unary function into a list of C expression whose length corresponds to the number of
 -- tuple components of the embedded result type. In addition ot the generated C, the types and names of the variables
 -- that need to contain the function argument are returned.
@@ -51,6 +56,8 @@ fun1ToC aenv (Lam (Body f))
   where
     (bnds, env) = EmptyEnv `pushExpEnv` (undefined::OpenExp () aenv t)
 fun1ToC _aenv _ = error "D.A.A.A.Exp.fun1ToC: unreachable"
+
+userFun1 = undefined
 
 -- Compile an open embedded scalar binary function into a list of C expression whose length corresponds to the number of
 -- tuple components of the embedded result type. In addition ot the generated C, the types and names of the variables
@@ -66,6 +73,8 @@ fun2ToC aenv (Lam (Lam (Body f)))
     (bnds1, env1) = EmptyEnv `pushExpEnv` (undefined::OpenExp ()       aenv t1)
     (bnds2, env2) = env1     `pushExpEnv` (undefined::OpenExp ((), t1) aenv t2)
 fun2ToC _aenv _ = error "D.A.A.A.Exp.fun2ToC: unreachable"
+
+userFun2 = undefined
 
 -- Compile an open embedded scalar expression into a list of C expression whose length corresponds to the number of tuple
 -- components of the embedded type.
@@ -84,7 +93,7 @@ openExpToC = expToC'
     expToC' env  aenv  (Tuple t)          = tupToC env aenv t
     expToC' env  aenv  e@(Prj i t)        = prjToC env aenv i t e
     expToC' env  aenv  (Cond p t e)       = condToC env aenv p t e
-    expToC' _env _aenv (Iterate _n _f _x) = error "D.A.A.C.Exp: 'Iterate' not supported"
+    -- expToC' _env _aenv (Iterate _n _f _x) = error "D.A.A.C.Exp: 'Iterate' not supported"
 
     -- Shapes and indices
     expToC' _env _aenv IndexNil                = []
