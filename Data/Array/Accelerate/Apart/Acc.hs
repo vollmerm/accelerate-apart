@@ -33,7 +33,7 @@ data ApartFun = ApartFun
                 { name   :: String
                 , params :: [UserVal]
                 , code   :: String
-                , ret    :: UserType
+                , ret    :: [UserType]
                 }
               deriving (Show)
 
@@ -68,17 +68,22 @@ addArrayDef def = state $ \s -> ((), s { arrayDefs = (arrayDefs s) ++ [def] })
 
 fun1ToUserFun :: forall t t' aenv. (Elt t, Elt t')
               => Int -> Env aenv -> OpenFun () aenv (t -> t') -> UserFun
-fun1ToUserFun i aenv e@(Lam (Body _)) = undefined
+fun1ToUserFun i aenv e@(Lam (Body _)) = do
+  name <- gensym
+  return $ UserFun { name = name, params = undefined, code = undefined, ret = undefined }
   where (bnds, exps) = fun1ToC aenv e
 fun1ToUserFun _i _aenv _ = error "unreachable"
 
 fun1Def :: forall t t' aenv. (Elt t, Elt t')
-        => Env aenv -> OpenFun () aenv (t -> t') -> Gen ()
+        => Env aenv -> OpenFun () aenv (t -> t') -> Gen UserFun
 fun1Def aenv e@(Lam (Body _)) = do
   s <- get
-  addScalarDef $ fun1ToUserFun (unique s) aenv e
+  f <- addScalarDef $ fun1ToUserFun (unique s) aenv e
   incUnique
+  return f
 fun1Def _aenv _ = error "unreachable"
+
+toVal = undefined
 
 accGen :: forall arrs aenv. Arrays arrs
          => Env aenv -> OpenAcc aenv arrs -> Gen (OpenAccWithName aenv arrs)
@@ -89,10 +94,26 @@ accGen aenv' (OpenAcc (Alet bnd body)) = do
 accGen aenv' acc@(OpenAcc (Map f arr)) = do
   arr' <- accGen aenv' arr
   funName <- gensym
+  arrName <- gensym
   let cresTys    = accTypeToC acc
       cresNames  = accNames "res" [length cresTys - 1]
       cargTys    = accTypeToC arr
       cargNames  = accNames "arg" [length cargTys - 1]
       (bnds, es) = fun1ToC aenv' f
+      funCode    = concat $ map (show . C.ppr) es
+      fun        = UserFun {
+        name   = funName,
+        params = zipWith toVal cargNames cargTys,
+        code   = funCode,
+        ret    = zipWith toVal cresNames cresTys
+        }
+      apartArr   = ArrayFun { 
+        name   = arrName,
+        params = [],
+        code   = "Map(" ++ funName ++ ")",
+        ret    = []
+        }
+  addScalarDef fun 
+  addArrayDef apartArr
   return undefined
 accGen _aenv _ = undefined
