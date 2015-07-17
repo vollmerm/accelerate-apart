@@ -10,6 +10,7 @@ module Data.Array.Accelerate.Apart.Acc (
 
 import           Control.Monad.State
 import           Data.List
+import qualified Text.PrettyPrint.Mainland         as C
 import qualified Language.C                        as C
 import           Language.C.Quote.C                as C
 
@@ -67,10 +68,10 @@ addArrayDef :: ArrayFun -> Gen ()
 addArrayDef def = state $ \s -> ((), s { arrayDefs = (arrayDefs s) ++ [def] })
 
 fun1ToUserFun :: forall t t' aenv. (Elt t, Elt t')
-              => Int -> Env aenv -> OpenFun () aenv (t -> t') -> UserFun
+              => Int -> Env aenv -> OpenFun () aenv (t -> t') -> Gen UserFun
 fun1ToUserFun i aenv e@(Lam (Body _)) = do
   name <- gensym
-  return $ UserFun { name = name, params = undefined, code = undefined, ret = undefined }
+  return $ ApartFun { name = name, params = undefined, code = undefined, ret = undefined }
   where (bnds, exps) = fun1ToC aenv e
 fun1ToUserFun _i _aenv _ = error "unreachable"
 
@@ -78,7 +79,8 @@ fun1Def :: forall t t' aenv. (Elt t, Elt t')
         => Env aenv -> OpenFun () aenv (t -> t') -> Gen UserFun
 fun1Def aenv e@(Lam (Body _)) = do
   s <- get
-  f <- addScalarDef $ fun1ToUserFun (unique s) aenv e
+  f <- fun1ToUserFun (unique s) aenv e
+  addScalarDef f
   incUnique
   return f
 fun1Def _aenv _ = error "unreachable"
@@ -101,19 +103,25 @@ accGen aenv' acc@(OpenAcc (Map f arr)) = do
       cargNames  = accNames "arg" [length cargTys - 1]
       (bnds, es) = fun1ToC aenv' f
       funCode    = concat $ map (show . C.ppr) es
-      fun        = UserFun {
+      fun        = ApartFun {
         name   = funName,
         params = zipWith toVal cargNames cargTys,
         code   = funCode,
         ret    = zipWith toVal cresNames cresTys
         }
-      apartArr   = ArrayFun { 
+      apartArr   = ApartFun { 
         name   = arrName,
-        params = [],
+        params = undefined,
         code   = "Map(" ++ funName ++ ")",
-        ret    = []
+        ret    = undefined
         }
   addScalarDef fun 
   addArrayDef apartArr
-  return undefined
+  return $ OpenAccWithName funName (Map (adaptFun f) arr')
 accGen _aenv _ = undefined
+
+adaptFun :: OpenFun env aenv t -> OpenFunWithName env aenv t
+adaptFun (Body e) = Body $ adaptExp e
+adaptFun (Lam  f) = Lam  $ adaptFun f
+
+adaptExp = undefined
