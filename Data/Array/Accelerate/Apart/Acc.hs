@@ -106,10 +106,39 @@ accGen aenv' acc@(OpenAcc (Map f arr)) = do
   addScalarDef fun
   addArrayDef apartArr
   return $ OpenAccWithName funName (Map (adaptFun f) arr')
-accGen _aenv _ = undefined
+accGen _aenv _ = error "Not implemented."
 
 adaptFun :: OpenFun env aenv t -> OpenFunWithName env aenv t
 adaptFun (Body e) = Body $ adaptExp e
 adaptFun (Lam  f) = Lam  $ adaptFun f
-
-adaptExp = undefined
+adaptExp :: OpenExp env aenv t -> OpenExpWithName env aenv t
+adaptExp e = case e of
+              Var ix -> Var ix
+              Let bnd body -> Let (adaptExp bnd) (adaptExp body)
+              Const c -> Const c
+              PrimConst c -> PrimConst c
+              PrimApp f x -> PrimApp f (adaptExp x)
+              Tuple t -> Tuple (adaptTuple t)
+              Prj ix e -> Prj ix (adaptExp e)
+              Cond p t e -> Cond (adaptExp p) (adaptExp t) (adaptExp e)
+              IndexAny -> IndexAny
+              IndexNil -> IndexNil
+              IndexCons sh sz -> IndexCons (adaptExp sh) (adaptExp sz)
+              IndexHead sh -> IndexHead (adaptExp sh)
+              IndexTail sh -> IndexTail (adaptExp sh)
+              IndexSlice ix slix sh -> IndexSlice ix (adaptExp slix) (adaptExp sh)
+              IndexFull ix slix sl -> IndexFull ix (adaptExp slix) (adaptExp sl)
+              ToIndex sh ix -> ToIndex (adaptExp sh) (adaptExp ix)
+              FromIndex sh ix -> FromIndex (adaptExp sh) (adaptExp ix)
+              Intersect sh1 sh2 -> Intersect (adaptExp sh1) (adaptExp sh2)
+              ShapeSize sh -> ShapeSize (adaptExp sh)
+              Shape acc -> Shape (adaptAcc acc)
+              Index acc ix -> Index (adaptAcc acc) (adaptExp ix)
+              LinearIndex acc ix -> LinearIndex (adaptAcc acc) (adaptExp ix)
+              Foreign fo f x -> Foreign fo (adaptFun f) (adaptExp x)
+  where
+    adaptTuple :: Tuple (OpenExp env aenv) t -> Tuple (OpenExpWithName env aenv) t
+    adaptTuple NilTup = NilTup
+    adaptTuple (t `SnocTup` e) = adaptTuple t `SnocTup` adaptExp e
+    adaptAcc (OpenAcc (Avar ix)) = OpenAccWithName noName (Avar ix)
+    adaptAcc _ = error "D.A.A.C: unlifted array computation"
