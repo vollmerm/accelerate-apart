@@ -5,7 +5,7 @@
 
 module Data.Array.Accelerate.Apart.Acc (
   OpenAccWithName(..), OpenExpWithName, OpenFunWithName,
-  accToApart, fun1ToUserFun
+  accToApart, accGen
   ) where
 
 import           Control.Monad.State
@@ -26,20 +26,21 @@ data OpenAccWithName aenv t = OpenAccWithName Name (PreOpenAcc OpenAccWithName a
 type OpenExpWithName = PreOpenExp OpenAccWithName
 type OpenFunWithName = PreOpenFun OpenAccWithName
 
-data UserType = Fl | Fx | Tup [UserType]
-              deriving (Show)
-type UserVal = (UserType, String)
+type UserVal = (String, String)
 
-data ApartFun = ApartFun
-                { name   :: String
-                , params :: [UserVal]
-                , code   :: String
-                , ret    :: [UserType]
+data UserFun = UserFun
+               { usrName   :: String
+               , usrParams :: [UserVal]
+               , usrCode   :: String
+               , usrRet    :: [UserVal]
+               }
+               deriving (Show)
+
+data ArrayFun = ArrayFun
+                { arrName :: String
+                , arrCode :: String
                 }
-              deriving (Show)
-
-type UserFun = ApartFun
-type ArrayFun = ApartFun
+                deriving (Show)
 
 data GenState = GenState
                 { unique     :: Int
@@ -49,7 +50,12 @@ data GenState = GenState
 
 type Gen = State GenState
 
-accToApart = undefined
+accToApart :: forall arrs aenv. Arrays arrs => Env aenv -> OpenAcc aenv arrs
+           -> (String, String, OpenAccWithName aenv arrs)
+accToApart aenv acc = let (acc', state) = runState (accGen aenv acc) $ GenState 0 [] []
+                          userFuns      = concat $ map show (scalarDefs state)
+                          arrayFuns     = concat $ map show (arrayDefs state)
+                      in (userFuns, arrayFuns, acc')
 
 incUnique :: Gen ()
 incUnique = state $ \s -> ((), s { unique = (unique s) + 1 })
@@ -59,7 +65,7 @@ gensym = do
   s <- get
   let i = unique s
   incUnique
-  return $ "fun" ++ (show i)
+  return $ "gensym" ++ (show i)
 
 addScalarDef :: UserFun -> Gen ()
 addScalarDef def = state $ \s -> ((), s { scalarDefs = (scalarDefs s) ++ [def] })
@@ -67,55 +73,37 @@ addScalarDef def = state $ \s -> ((), s { scalarDefs = (scalarDefs s) ++ [def] }
 addArrayDef :: ArrayFun -> Gen ()
 addArrayDef def = state $ \s -> ((), s { arrayDefs = (arrayDefs s) ++ [def] })
 
-fun1ToUserFun :: forall t t' aenv. (Elt t, Elt t')
-              => Int -> Env aenv -> OpenFun () aenv (t -> t') -> Gen UserFun
-fun1ToUserFun i aenv e@(Lam (Body _)) = do
-  name <- gensym
-  return $ ApartFun { name = name, params = undefined, code = undefined, ret = undefined }
-  where (bnds, exps) = fun1ToC aenv e
-fun1ToUserFun _i _aenv _ = error "unreachable"
-
-fun1Def :: forall t t' aenv. (Elt t, Elt t')
-        => Env aenv -> OpenFun () aenv (t -> t') -> Gen UserFun
-fun1Def aenv e@(Lam (Body _)) = do
-  s <- get
-  f <- fun1ToUserFun (unique s) aenv e
-  addScalarDef f
-  incUnique
-  return f
-fun1Def _aenv _ = error "unreachable"
-
-toVal = undefined
-
 accGen :: forall arrs aenv. Arrays arrs
          => Env aenv -> OpenAcc aenv arrs -> Gen (OpenAccWithName aenv arrs)
 accGen aenv' (OpenAcc (Alet bnd body)) = do
   bnd'  <- accGen aenv' bnd
   body' <- accGen (snd $ pushAccEnv aenv' bnd) body
   return $ OpenAccWithName noName (Alet bnd' body')
+accGen aenv' (OpenAcc (Avar ix)) = return $ OpenAccWithName noName (Avar ix)
+accGen aenv' (OpenAcc (Use arr)) = return $ OpenAccWithName noName (Use arr)
 accGen aenv' acc@(OpenAcc (Map f arr)) = do
   arr' <- accGen aenv' arr
   funName <- gensym
   arrName <- gensym
+  lambName <- gensym
   let cresTys    = accTypeToC acc
       cresNames  = accNames "res" [length cresTys - 1]
       cargTys    = accTypeToC arr
       cargNames  = accNames "arg" [length cargTys - 1]
       (bnds, es) = fun1ToC aenv' f
       funCode    = concat $ map (show . C.ppr) es
-      fun        = ApartFun {
-        name   = funName,
-        params = zipWith toVal cargNames cargTys,
-        code   = funCode,
-        ret    = zipWith toVal cresNames cresTys
+      fun        = UserFun {
+        usrName   = funName,
+        usrParams = zip cargNames $ map (show . C.ppr) cargTys,
+        usrCode   = funCode,
+        usrRet    = zip cresNames $ map (show . C.ppr) cresTys
         }
-      apartArr   = ApartFun { 
-        name   = arrName,
-        params = undefined,
-        code   = "Map(" ++ funName ++ ")",
-        ret    = undefined
+      apartArr   = ArrayFun {
+        arrName   = arrName,
+        arrCode   = "(fun " ++ lambName ++ " => Map(" ++ funName ++ ") $ " ++ lambName ++ ")"
         }
-  addScalarDef fun 
+
+  addScalarDef fun
   addArrayDef apartArr
   return $ OpenAccWithName funName (Map (adaptFun f) arr')
 accGen _aenv _ = undefined
