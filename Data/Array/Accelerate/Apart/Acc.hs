@@ -94,9 +94,10 @@ accGen aenv' acc@(OpenAcc (Map f arr)) = do
       funCode    = concat $ map (show . C.ppr) es
       fun        = UserFun {
         usrName   = funName,
-        usrParams = zip cargNames $ map (show . C.ppr) cargTys,
+--        usrParams = zip cargNames $ map (show . C.ppr) cargTys,
+        usrParams = map (\(t,n) ->  ((show . C.ppr) t, n)) bnds,
         usrCode   = funCode,
-        usrRet    = zip cresNames $ map (show . C.ppr) cresTys
+        usrRet    = tail (zip cresNames $ map (show . C.ppr) cresTys)
         }
       apartArr   = ArrayFun {
         arrName   = arrName,
