@@ -10,12 +10,13 @@ module Data.Array.Accelerate.Apart.Acc (
 
 import           Control.Monad.State
 import           Data.List
-import qualified Text.PrettyPrint.Mainland         as C
-import qualified Language.C                        as C
-import           Language.C.Quote.C                as C
+import qualified Text.PrettyPrint.Mainland as C
+import qualified Language.C as C
+import           Language.C.Quote.C as C
 
+import           Data.Array.Accelerate.AST hiding (Val (..), prj)
 import           Data.Array.Accelerate.Array.Sugar
-import           Data.Array.Accelerate.AST         hiding (Val (..), prj)
+import           Data.Array.Accelerate.Trafo.Sharing as Sharing
 import           Data.Array.Accelerate.Tuple
 
 import           Data.Array.Accelerate.Apart.Base
