@@ -56,14 +56,14 @@ numTypeToC (IntegralNumType ty) = integralTypeToC ty
 numTypeToC (FloatingNumType ty) = floatingTypeToC ty
 
 integralTypeToC :: IntegralType a -> C.Type
-integralTypeToC (TypeInt8    _) = typename "HsInt8"
-integralTypeToC (TypeInt16   _) = typename "HsInt16"
-integralTypeToC (TypeInt32   _) = typename "HsInt32"
-integralTypeToC (TypeInt64   _) = typename "HsInt64"
-integralTypeToC (TypeWord8   _) = typename "HsWord8"
-integralTypeToC (TypeWord16  _) = typename "HsWord16"
-integralTypeToC (TypeWord32  _) = typename "HsWord32"
-integralTypeToC (TypeWord64  _) = typename "HsWord64"
+integralTypeToC (TypeInt8    _) = typename "Int8"
+integralTypeToC (TypeInt16   _) = typename "Int16"
+integralTypeToC (TypeInt32   _) = typename "Int32"
+integralTypeToC (TypeInt64   _) = typename "Int64"
+integralTypeToC (TypeWord8   _) = typename "Word8"
+integralTypeToC (TypeWord16  _) = typename "Word16"
+integralTypeToC (TypeWord32  _) = typename "Word32"
+integralTypeToC (TypeWord64  _) = typename "Word64"
 integralTypeToC (TypeCShort  _) = [cty|short|]
 integralTypeToC (TypeCUShort _) = [cty|unsigned short|]
 integralTypeToC (TypeCInt    _) = [cty|int|]
@@ -72,8 +72,8 @@ integralTypeToC (TypeCLong   _) = [cty|long int|]
 integralTypeToC (TypeCULong  _) = [cty|unsigned long int|]
 integralTypeToC (TypeCLLong  _) = [cty|long long int|]
 integralTypeToC (TypeCULLong _) = [cty|unsigned long long int|]
-integralTypeToC (TypeInt     _) = typename "HsInt"
-integralTypeToC (TypeWord    _) = typename "HsWord"
+integralTypeToC (TypeInt     _) = typename "Int"
+integralTypeToC (TypeWord    _) = typename "Word"
 
 floatingTypeToC :: FloatingType a -> C.Type
 floatingTypeToC (TypeFloat   _) = [cty|float|]
@@ -82,8 +82,8 @@ floatingTypeToC (TypeDouble  _) = [cty|double|]
 floatingTypeToC (TypeCDouble _) = [cty|double|]
 
 nonNumTypeToC :: NonNumType a -> C.Type
-nonNumTypeToC (TypeBool   _) = typename "HsBool"
-nonNumTypeToC (TypeChar   _) = typename "HsChar"
+nonNumTypeToC (TypeBool   _) = typename "Bool"
+nonNumTypeToC (TypeChar   _) = typename "Char"
 nonNumTypeToC (TypeCChar  _) = [cty|char|]
 nonNumTypeToC (TypeCSChar _) = [cty|signed char|]
 nonNumTypeToC (TypeCUChar _) = [cty|unsigned char|]

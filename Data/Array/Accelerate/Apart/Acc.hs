@@ -23,6 +23,8 @@ import           Data.Array.Accelerate.Apart.Base
 import           Data.Array.Accelerate.Apart.Exp
 import           Data.Array.Accelerate.Apart.Type
 
+import           Data.List
+
 data OpenAccWithName aenv t = OpenAccWithName Name (PreOpenAcc OpenAccWithName aenv t)
 type OpenExpWithName = PreOpenExp OpenAccWithName
 type OpenFunWithName = PreOpenFun OpenAccWithName
@@ -35,7 +37,25 @@ data UserFun = UserFun
                , usrCode   :: String
                , usrRet    :: [UserVal]
                }
-               deriving (Show)
+
+showParams :: [UserVal] -> String
+showParams [v] = "\"" ++ (snd v) ++ "\""
+showParams vs = "Array(" ++ (intercalate "," $ map quoteNames vs) ++ ")"
+  where quoteNames (_,n) = "\"" ++ n ++ "\""
+
+showParamType :: [UserVal] -> String
+showParamType [v] = fst v
+showParamType vs = "Seq(" ++ (intercalate "," $ map fst vs) ++ ")"
+
+showRetType :: [UserVal] -> String
+showRetType [v] = snd v
+showRetType vs = "TupleType(" ++ (intercalate "," $ map snd vs) ++ ")"
+
+instance Show UserFun where
+  show u = "val " ++ (usrName u) ++ " = UserFunDef(\"" ++ (usrName u) ++ "\", "
+           ++ (showParams $ usrParams u) ++ ", \"{" ++ (usrCode u) ++ "}\", "
+           ++ (showParamType $ usrParams u) ++ ", " ++ (showRetType $ usrRet u) ++ ")"
+
 
 data ArrayFun = ArrayFun
                 { arrName :: String
@@ -74,6 +94,11 @@ addScalarDef def = state $ \s -> ((), s { scalarDefs = (scalarDefs s) ++ [def] }
 addArrayDef :: ArrayFun -> Gen ()
 addArrayDef def = state $ \s -> ((), s { arrayDefs = (arrayDefs s) ++ [def] })
 
+makeReturnStmt :: [String] -> String
+makeReturnStmt []  = "return;"
+makeReturnStmt [x] = "return " ++ x ++ ";"
+makeReturnStmt _   = undefined
+
 accGen :: forall arrs aenv. Arrays arrs
          => Env aenv -> OpenAcc aenv arrs -> Gen (OpenAccWithName aenv arrs)
 accGen aenv' (OpenAcc (Alet bnd body)) = do
@@ -92,17 +117,23 @@ accGen aenv' acc@(OpenAcc (Map f arr)) = do
       cargTys    = accTypeToC arr
       cargNames  = accNames "arg" [length cargTys - 1]
       (bnds, es) = fun1ToC aenv' f
-      funCode    = concat $ map (show . C.ppr) es
+
+  retNames <- forM es $ \_ -> do
+    name <- gensym
+    return name
+  let retStmt    = makeReturnStmt retNames
+      funStmts   = map ((++ "; ") . show . C.ppr) es
+      funCode    = (++ retStmt) $ concat $ zipWith (\n s -> n ++ " = " ++ s) retNames funStmts
       fun        = UserFun {
-        usrName   = funName,
-        usrParams = zip cargNames $ map (show . C.ppr) cargTys,
-        usrCode   = funCode,
-        usrRet    = zip cresNames $ map (show . C.ppr) cresTys
-        }
+                    usrName   = funName,
+                    usrParams = map (\(t,n) -> (show $ C.ppr $ t,n)) bnds,
+                    usrCode   = funCode,
+                    usrRet    = zip retNames $ map (init . show . C.ppr) $ tail cresTys
+                    }
       apartArr   = ArrayFun {
-        arrName   = arrName,
-        arrCode   = "(fun " ++ lambName ++ " => Map(" ++ funName ++ ") $ " ++ lambName ++ ")"
-        }
+                    arrName   = arrName,
+                    arrCode   = "(fun " ++ lambName ++ " => Map(" ++ funName ++ ") $ " ++ lambName ++ ")"
+                    }
 
   addScalarDef fun
   addArrayDef apartArr
