@@ -123,16 +123,18 @@ accGen aenv' acc@(OpenAcc (Map f arr)) = do
     return name
   let retStmt    = makeReturnStmt retNames
       funStmts   = map ((++ "; ") . show . C.ppr) es
-      funCode    = (++ retStmt) $ concat $ zipWith (\n s -> n ++ " = " ++ s) retNames funStmts
+      funCode    = (++ retStmt) $ concat $ zipWith (\t s -> (init $ show $ C.ppr t) ++ " " ++ s) (tail cresTys)
+                   $ zipWith (\n s -> n ++ " = " ++ s) retNames funStmts
+      params     = map (\(t,n) -> (show $ C.ppr $ t,n)) bnds
       fun        = UserFun {
                     usrName   = funName,
-                    usrParams = map (\(t,n) -> (show $ C.ppr $ t,n)) bnds,
+                    usrParams = params,
                     usrCode   = funCode,
                     usrRet    = zip retNames $ map (init . show . C.ppr) $ tail cresTys
                     }
       apartArr   = ArrayFun {
                     arrName   = arrName,
-                    arrCode   = "(fun " ++ lambName ++ " => Map(" ++ funName ++ ") $ " ++ lambName ++ ")"
+                    arrCode   = "(fun " ++ showParamType params ++ ", " ++ lambName ++ " => Map(" ++ funName ++ ") $ " ++ lambName ++ ")"
                     }
 
   addScalarDef fun
